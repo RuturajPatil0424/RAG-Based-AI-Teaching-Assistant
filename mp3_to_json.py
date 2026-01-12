@@ -2,12 +2,11 @@ import whisper
 import json
 import os
 
-model = whisper.load_model("large-v2")
+model = whisper.load_model("large-v2", device="cuda")
 
 audios = os.listdir("src/audio")
 
 for audio in audios:
-        title = audio
         result = model.transcribe(audio = f"src/audio/{audio}",
                               language="hi",
                               task="translate",
@@ -15,7 +14,7 @@ for audio in audios:
         
         chunks = []
         for segment in result["segments"]:
-            chunks.append({"title":title, "start": segment["start"], "end": segment["end"], "text": segment["text"]})
+            chunks.append({"title":audio, "start": segment["start"], "end": segment["end"], "text": segment["text"]})
         
         chunks_with_metadata = {"chunks": chunks, "text": result["text"]}
 
