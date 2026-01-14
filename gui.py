@@ -2,17 +2,23 @@ from video_to_mp3 import name_list, format_converter
 from chunking import WhisperTranscriber
 from pathlib import Path
 from vector_store import BGEVectorStore
+from llm_answer import ask_llm_with_context
+from llm_answer_streaming import ask_llm_with_context_streaming
 
 VIDEO_DIR = Path("src/video")
 AUDIO_DIR = Path("src/audio")
 
 VIDEO_DIR.mkdir(parents=True, exist_ok=True)
 AUDIO_DIR.mkdir(parents=True, exist_ok=True)
-available_files = [f for f in VIDEO_DIR.iterdir() if f.is_file()]
+
 
 db = BGEVectorStore(index_path="src/vector_db")
 
+answer_type = "streaming"
+sel_model = "llama3:8b"
+
 def video_to_mp3():
+    available_files = [f for f in VIDEO_DIR.iterdir() if f.is_file()]
     file_map = name_list(available_files)
     format_converter(file_map, VIDEO_DIR, AUDIO_DIR, "mp3")
 
@@ -29,19 +35,9 @@ def text_to_Embeddings(chunks):
 
     print("✅ Vector database saved")
 
-
-    # db = BGEVectorStore(index_path="src/vector_db")
-    # db.load()
-    #
-    # results = db.search("Explain transformer architecture", top_k=5)
-    #
-    # for r in results:
-    #     print("\n---")
-    #     print("Score:", r["score"])
-    #     print("Text:", r["embedding_text"])
-    #     print("Source:", r["source_name"])
-    #
-    # return results
+def import_and_process_files():
+    split_data = text_chunking("src/pdf/Dsa.pdf")
+    text_to_Embeddings(split_data)
 
 #---------------- RUN ----------------
 while "__main__" == "__main__":
@@ -63,12 +59,20 @@ while "__main__" == "__main__":
     if not matches:
         print("❌ No relevant data found")
     else:
-        for i, r in enumerate(matches, 1):
-            print(f"\nResult #{i}")
-            print("Score:", round(r["score"], 3))
-            print("Text:", r.get("paragraph_text", r["embedding_text"]))
-            print("Source:", r.get("source_name"))
+        if answer_type == "streaming":
+            answer = ask_llm_with_context_streaming(
+                user_query=user_query,
+                matches=matches,
+                llm_model=f"{sel_model}"
+            )
 
-def data_processing():
-    split_data = text_chunking("src/pdf/Dsa.pdf")
-    text_to_Embeddings(split_data)
+        else:
+            answer = ask_llm_with_context(
+                user_query=user_query,
+                matches=matches,
+                llm_model=f"{sel_model}"
+            )
+
+        print("\n🧠 Final Answer:\n")
+        print(answer)
+
