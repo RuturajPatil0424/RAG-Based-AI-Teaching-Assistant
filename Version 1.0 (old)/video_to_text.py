@@ -4,46 +4,48 @@ import fitz
 from docx import Document
 import nltk
 from nltk.tokenize import sent_tokenize
-
-# Download once
-nltk.download("punkt", quiet=True)
-nltk.download('punkt_tab')
-
+# nltk.download('punkt_tab')
 class WhisperTranscriber:
-    def __init__(self, device="cuda"):
-        # Use medium for speed + accuracy balance
-        self.whisper_model = whisper.load_model("medium", device)
+    def __init__(self):
+        #  LOAD MODELS 
+        self.whisper_model = whisper.load_model("large-v2", "cuda")
 
-    #  COMMON 
+
+
     def split_sentences(self, text):
         return [s.strip() for s in sent_tokenize(text) if s.strip()]
 
-    #  AUDIO / VIDEO 
-    def extract_from_audio(self, file_path, window=1):
-        result = self.whisper_model.transcribe(file_path)
-        segments = result["segments"]
+    #  AUDIO to TEXT 
+    # def extract_from_audio(self, file_path):
+    #     result = self.whisper_model.transcribe(file_path)
+    #     chunks = []
+    #
+    #     for seg in result["segments"]:
+    #         chunks.append({
+    #             "text": seg["text"].strip(),
+    #             "start": round(seg["start"], 2),
+    #             "end": round(seg["end"], 2),
+    #             "source_type": "video",
+    #             "source_name": os.path.basename(file_path)
+    #         })
+    #     return chunks
 
-        records = []
+    def extract_from_audio(self, segments, index, window=1):
+        start_idx = max(0, index - window)
+        end_idx = min(len(segments), index + window + 1)
 
-        for idx, seg in enumerate(segments):
-            start_idx = max(0, idx - window)
-            end_idx = min(len(segments), idx + window + 1)
+        context_text = []
+        start_time = segments[start_idx]["start"]
+        end_time = segments[end_idx - 1]["end"]
 
-            context_text = " ".join(
-                segments[i]["text"].strip() for i in range(start_idx, end_idx)
-            )
+        for i in range(start_idx, end_idx):
+            context_text.append(segments[i]["text"])
 
-            records.append({
-                "embedding_text": seg["text"].strip(),
-                "context_text": context_text,
-                "start_time": round(segments[start_idx]["start"], 2),
-                "end_time": round(segments[end_idx - 1]["end"], 2),
-                "source_type": "audio",
-                "source_name": os.path.basename(file_path),
-                "segment_index": idx
-            })
-
-        return records
+        return {
+            "context_text": " ".join(context_text),
+            "start_time": round(start_time, 2),
+            "end_time": round(end_time, 2)
+        }
 
     #  PDF 
     def extract_from_pdf(self, file_path):
@@ -51,7 +53,7 @@ class WhisperTranscriber:
         records = []
 
         for page_no, page in enumerate(doc, start=1):
-            blocks = page.get_text("blocks")
+            blocks = page.get_text("blocks")  # paragraph-like blocks
 
             for block_idx, block in enumerate(blocks):
                 paragraph_text = block[4].strip()
@@ -59,6 +61,7 @@ class WhisperTranscriber:
                     continue
 
                 sentences = self.split_sentences(paragraph_text)
+
                 paragraph_id = f"{os.path.basename(file_path)}_p{page_no}_{block_idx}"
 
                 for sent_idx, sentence in enumerate(sentences):
@@ -73,6 +76,7 @@ class WhisperTranscriber:
                     })
 
         return records
+
 
     #  DOCX 
     def extract_from_docx(self, file_path):
@@ -93,11 +97,13 @@ class WhisperTranscriber:
                     "paragraph_text": paragraph_text,
                     "source_type": "document",
                     "source_name": os.path.basename(file_path),
+                    "paragraph": para_idx + 1,
                     "paragraph_id": paragraph_id,
                     "sentence_index": sent_idx
                 })
 
         return records
+
 
     #  TXT 
     def extract_from_txt(self, file_path):
@@ -122,6 +128,7 @@ class WhisperTranscriber:
 
         return records
 
+
     #  ROUTER 
     def extract_text(self, file_path):
         ext = file_path.lower()
@@ -140,7 +147,8 @@ class WhisperTranscriber:
 
         raise ValueError(f"Unsupported file type: {file_path}")
 
-    #  INGEST 
+
+    #  SINGLE OR MULTIPLE HANDLER 
     def ingest(self, input_path):
         all_chunks = []
 
@@ -165,3 +173,7 @@ class WhisperTranscriber:
         return all_chunks
 
 
+file_path = "src/pdf/"
+transcriber = WhisperTranscriber()
+chunks = transcriber.ingest(file_path)
+print(chunks)

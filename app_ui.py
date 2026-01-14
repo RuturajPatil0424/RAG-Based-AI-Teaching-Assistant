@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 from media_audio_extractor import name_list, format_converter
 from text_chunker import WhisperTranscriber
@@ -5,6 +6,8 @@ from vector_database import BGEVectorStore
 from rag_answer import ask_llm_with_context
 from rag_answer_streaming import ask_llm_with_context_streaming
 from llm_answer import ask_local_llm
+
+
 
 VIDEO_DIR = Path("src/video")
 AUDIO_DIR = Path("src/audio")
@@ -14,10 +17,19 @@ AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 
 db = BGEVectorStore(index_path="src/vector_db")
 
-answer_streaming = False
-sel_model = "llama3:8b"
-rag_model = False
 
+
+def get_local_models():
+    try:
+        result = subprocess.run(
+            ["ollama", "list"],
+            capture_output=True,
+            text=True
+        )
+        lines = result.stdout.strip().split("\n")[1:]
+        return [line.split()[0] for line in lines]
+    except Exception:
+        return []
 
 def video_to_mp3():
     available_files = [f for f in VIDEO_DIR.iterdir() if f.is_file()]
@@ -40,15 +52,13 @@ def text_to_Embeddings(chunks):
     print("✅ Vector database saved")
 
 
-def import_and_process_files():
-    split_data = text_chunking("src/pdf/Dsa.pdf")
+def import_and_process_files(path):
+    split_data = text_chunking(path)
     text_to_Embeddings(split_data)
 
 
-# ---------------- RUN ----------------
-while "__main__" == "__main__":
-
-    user_query = input("Enter query: ")
+#  RUN 
+def Qurey_handlder(user_query, sel_model, rag_model, answer_streaming):
 
     matches = db.search_vector_db(
         query=user_query,
@@ -63,16 +73,18 @@ while "__main__" == "__main__":
     ]
 
     if rag_model == True:
-        print("Rag llm model")
         if not matches:
             print("❌ No relevant data found")
         else:
             if answer_streaming == True:
-                answer = ask_llm_with_context_streaming(
-                    user_query=user_query,
-                    matches=matches,
-                    llm_model=sel_model
-                )
+                # answer = ask_llm_with_context_streaming(
+                #     user_query=user_query,
+                #     matches=matches,
+                #     llm_model=sel_model
+                # )
+                # return answer
+
+                return "The streaming this feature is currently unavailable!\n Please continue with stream option off until we fix issue in next update!"
 
             else:
                 answer = ask_llm_with_context(
@@ -80,16 +92,14 @@ while "__main__" == "__main__":
                     matches=matches,
                     llm_model=sel_model
                 )
-            print("\n🧠 Final Answer:\n")
-            print("\n📊 Confidence Score:", answer["confidence"], "%")
+            return answer
     else:
-        print("local llm model")
         answer = ask_local_llm(
             user_query=user_query,
             llm_model=sel_model,
             streaming=answer_streaming
         )
-
-        print("\n🧠 Final Answer:\n")
-        # print("\n📊 Confidence Score:", answer["confidence"], "%")
-        print(answer)
+        return answer
+        # print("\n🧠 Final Answer:\n")
+        # # print("\n📊 Confidence Score:", answer["confidence"], "%")
+        # print(answer)
