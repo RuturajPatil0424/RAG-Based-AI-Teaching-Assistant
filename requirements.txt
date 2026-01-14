@@ -1,2 +1,35 @@
+# Core
+python-dotenv
+
+# LLM & RAG
+langchain
+langchain-community
+langchain-core
+
+# Embeddings
+sentence-transformers
+
+# Vector Store
+faiss-gpu
+
+# Local LLM Communication
+requests
+
+# NLP
+nltk
+
+# Document Processing
+pypdf
+python-docx
+
+# Audio / Video Processing
+openai-whisper
 ffmpeg-python
-pymupdf
+
+# GUI
+customtkinter
+tk
+
+# Utilities
+tqdm
+numpy
