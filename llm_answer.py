@@ -1,80 +1,72 @@
 import requests
+import json
 
 OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
 
+def ask_local_llm(user_query, llm_model, streaming = False):
+    prompt = create_prompt(user_query)
 
-def ask_llm_with_context(
-    user_query: str,
-    matches: list,
-    llm_model: str = "llama3:8b"
-):
-    # ---------------- BUILD CONTEXT ----------------
-    context_blocks = []
-    source_map = []
+    if streaming == True:
+        response = requests.post(
+            OLLAMA_URL,
+            json={
+                "model": llm_model,
+                "prompt": prompt,
+                "stream": True,
+                "options": {
+                    "temperature": 0.2,
+                    "top_p": 0.9
+                }
+            },
+            stream=True,
+            timeout=300
+        )
 
-    for i, r in enumerate(matches, 1):
-        text = r.get("paragraph_text", r["embedding_text"])
-        source = r.get("source_name", "unknown")
+        response.raise_for_status()
 
-        # Handle document vs video metadata
-        if "page" in r:
-            source_info = f"{source} (page {r['page']})"
-        elif "start_time" in r and "end_time" in r:
-            source_info = f"{source} (timestamp {r['start_time']}s–{r['end_time']}s)"
-        else:
-            source_info = source
+        print("\n🧠 Answer (streaming):\n")
 
-        context_blocks.append(f"[{i}] {text}")
-        source_map.append(f"[{i}] {source_info}")
+        full_answer = ""
 
-    context_text = "\n\n".join(context_blocks)
-    sources_text = "\n".join(source_map)
+        for line in response.iter_lines():
+            if not line:
+                continue
 
-    # ---------------- OPTIMIZED PROMPT ----------------
-    prompt = f"""
-You are a precise academic assistant.
+            data = json.loads(line.decode("utf-8"))
 
-RULES:
-- Use ONLY the reference context provided below.
-- Do NOT use prior knowledge.
-- Do NOT guess or hallucinate.
-- If the answer is not fully present, say:
-  "Answer not found in the provided sources."
-- Write a clear, structured explanation.
-- At the end, include a "Sources" section.
+            token = data.get("response", "")
+            print(token, end="", flush=True)
+            full_answer += token
 
-### Reference Context:
-{context_text}
-
-### User Question:
-{user_query}
-
-### Answer Format:
-<Answer in clear paragraphs>
-
-Sources:
-- file name + page number OR timestamp
-
-### Sources Reference:
-{sources_text}
-
-### Answer:
-"""
-
-    # ---------------- CALL OLLAMA ----------------
-    response = requests.post(
-        OLLAMA_URL,
-        json={
+            if data.get("done"):
+                break
+    else:
+        r = requests.post("http://localhost:11434/api/generate", json={
+            # "model": "deepseek-r1",
             "model": llm_model,
             "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": 0.2,
-                "top_p": 0.9
-            }
-        },
-        timeout=300
-    )
+            "stream": False
+        })
 
-    response.raise_for_status()
-    return response.json()["response"].strip()
+        response = r.json()
+        return response
+
+
+
+def create_prompt(user_query):
+
+    prompt = f'''You are a highly intelligent, helpful, and honest AI assistant.
+    
+    Your task:
+    - Understand the user's question carefully.
+    - Provide the most accurate, clear, and complete answer possible.
+    - Explain concepts simply when needed.
+    - Use step-by-step reasoning for complex or technical questions.
+    - Give examples or code snippets when they improve understanding.
+    - If the question is ambiguous, ask for clarification.
+    - If you do not know the answer or lack enough information, say so clearly instead of guessing.
+    
+    User question:
+    {user_query}'''
+
+    return prompt
