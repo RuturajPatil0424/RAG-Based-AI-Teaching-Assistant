@@ -110,7 +110,7 @@ RULES:
 
     # ---------------- SOURCES ----------------
     print("\n\nSources:")
-    for s in source_map:
+    for s in sorted(set(source_map)):
         print("-", s)
 
     print(f"\n📊 Confidence Score: {confidence}%")
